@@ -1,11 +1,14 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import FormularioPruebas from './formularioPruebas';
+import FormularioPruebas from './pruebas/formularioPruebas';
+import FormularioInscripcion from './inscripcion/formularioInscripcion';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<FormularioPruebas />} />
+        <Route path="/pruebas" element={<FormularioPruebas />} />
+        <Route path="/inscripcion" element={<FormularioInscripcion />} />
+        <Route path="*" element={<FormularioPruebas />} /> {/* ruta por defecto */}
       </Routes>
     </BrowserRouter>
   );
