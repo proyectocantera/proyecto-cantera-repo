@@ -9,24 +9,76 @@ export default function FormularioPruebas() {
     contacto_tutor: '',
     email: '',
     posicion: '',
-    categoria: '',
     observaciones: '',
     consentimiento_datos: false,
   });
 
-  const handleChange = (e) => {
+  const [categoriaDetectada, setCategoriaDetectada] = useState('');
+  const [horarioPruebas, setHorarioPruebas] = useState(null);
+  const [errores, setErrores] = useState({
+    email: '',
+    contacto_tutor: '',
+  });
+
+  function calcularCategoria(fechaNacimiento) {
+    const anio = new Date(fechaNacimiento).getFullYear();
+
+    if ([2007, 2008, 2009].includes(anio)) return 'Juvenil';
+    if ([2010, 2011].includes(anio)) return 'Cadete';
+    if ([2012, 2013].includes(anio)) return 'Infantil';
+    if ([2014, 2015].includes(anio)) return 'Alevín';
+    if ([2016, 2017].includes(anio)) return 'Benjamín';
+    if ([2018, 2019].includes(anio)) return 'Prebenjamín';
+    if (anio >= 2020) return 'Chupetín';
+
+    return 'Fuera de rango';
+  }
+
+  const handleChange = async (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData({
-      ...formData,
-      [name]: type === 'checkbox' ? checked : value,
-    });
+    const newForm = { ...formData, [name]: type === 'checkbox' ? checked : value };
+    const newErrores = { ...errores };
+
+    if (name === 'contacto_tutor') {
+      const telefonoValido = /^[0-9]{9,}$/.test(value);
+      newErrores.contacto_tutor = telefonoValido ? '' : 'Número no válido';
+    }
+
+    if (name === 'email') {
+      const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+      newErrores.email = emailValido ? '' : 'Email no válido';
+    }
+
+    setFormData(newForm);
+    setErrores(newErrores);
+
+    if (name === 'fecha_nacimiento') {
+      const categoria = calcularCategoria(value);
+      setCategoriaDetectada(categoria);
+
+      const { data, error } = await supabase
+        .from('categorias_horarios')
+        .select('dia, hora, lugar')
+        .eq('categoria', categoria)
+        .single();
+
+      setHorarioPruebas(!error ? data : null);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (errores.email || errores.contacto_tutor) {
+      alert('Corrige los errores antes de enviar.');
+      return;
+    }
+
+    const categoria_asignada = calcularCategoria(formData.fecha_nacimiento);
+
     const payload = {
       ...formData,
+      categoria_asignada,
       fecha_inscripcion: new Date().toISOString().split('T')[0],
       estado: 'pendiente',
     };
@@ -42,10 +94,11 @@ export default function FormularioPruebas() {
         contacto_tutor: '',
         email: '',
         posicion: '',
-        categoria: '',
         observaciones: '',
         consentimiento_datos: false,
       });
+      setCategoriaDetectada('');
+      setHorarioPruebas(null);
     } else {
       alert('Hubo un error al enviar la inscripción');
       console.error(error);
@@ -57,14 +110,11 @@ export default function FormularioPruebas() {
       <div className="w-full max-w-3xl bg-white rounded-3xl shadow-xl p-10">
         <h1 className="text-4xl font-bold text-center text-blue-800 mb-10">Inscripción a Pruebas del Club</h1>
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {[
+          {[ 
             { label: 'Nombre', name: 'nombre', type: 'text' },
             { label: 'Apellidos', name: 'apellidos', type: 'text' },
-            { label: 'Fecha de nacimiento', name: 'fecha_nacimiento', type: 'date' },
             { label: 'Teléfono del tutor', name: 'contacto_tutor', type: 'text' },
             { label: 'Email', name: 'email', type: 'email' },
-            { label: 'Posición preferida', name: 'posicion', type: 'text' },
-            { label: 'Categoría estimada', name: 'categoria', type: 'text' },
           ].map(({ label, name, type }) => (
             <div key={name}>
               <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
@@ -73,11 +123,53 @@ export default function FormularioPruebas() {
                 name={name}
                 value={formData[name]}
                 onChange={handleChange}
-                required={name !== 'posicion' && name !== 'categoria'}
-                className="w-full rounded-xl border border-gray-300 px-4 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                required
+                className={`w-full rounded-xl border px-4 py-2 bg-gray-50 focus:outline-none focus:ring-2 transition ${errores[name] ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'}`}
               />
+              {errores[name] && (
+                <p className="text-sm text-red-600 mt-1">{errores[name]}</p>
+              )}
             </div>
           ))}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de nacimiento</label>
+            <input
+              type="date"
+              name="fecha_nacimiento"
+              value={formData.fecha_nacimiento}
+              onChange={handleChange}
+              required
+              className="w-full rounded-xl border border-gray-300 px-4 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+            />
+            {categoriaDetectada && (
+              <p className="mt-2 text-sm text-blue-700 font-semibold">
+                Categoría detectada: {categoriaDetectada}
+              </p>
+            )}
+            {horarioPruebas && (
+              <p className="text-sm text-gray-600">
+                🗓️ Pruebas: {horarioPruebas.dia} a las {horarioPruebas.hora} en {horarioPruebas.lugar}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Posición preferida</label>
+            <select
+              name="posicion"
+              value={formData.posicion}
+              onChange={handleChange}
+              className="w-full rounded-xl border border-gray-300 px-4 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+              required
+            >
+              <option value="">Selecciona una opción</option>
+              <option value="Portero">Portero</option>
+              <option value="Defensa">Defensa</option>
+              <option value="Mediocentro">Mediocentro</option>
+              <option value="Delantero">Delantero</option>
+            </select>
+          </div>
 
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Observaciones</label>
